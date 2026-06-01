@@ -1,0 +1,46 @@
+Package: aasv
+Type: Package
+Title: A Metabarcoding Pipeline for Windows
+Version: 0.1.0
+Authors@R: 
+    c(person(given = "Alex",
+             family = "Laini",
+             role = c("aut", "cre"),
+             email = "alex.laini@gmail.com",
+             comment = c(ORCID = "0000-0002-3458-7538")),
+             person(given = "Samuele",
+             family = "Voyron",
+             role = c("aut"),
+             email = "samuele.voyron@unito.it",
+             comment = c(ORCID = "0000-0001-6921-9519")),
+             person(given = "Laura",
+             family = "Gruppuso",
+             role = c("aut"),
+             email = "laura.gruppuso@unito.it",
+             comment = c(ORCID = "0000-0001-5627-5423")))
+Description: An organized pipeline for Windows that leverages vsearch and cutadapt.
+License: GPL (>= 2)
+Encoding: UTF-8
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.1.0)
+Suggests:
+    testthat (>= 3.0.0)
+Imports:
+    Biostrings,
+    DECIPHER,
+    dplyr,
+    grantham,
+    httr2,
+    jsonlite,
+    magrittr,
+    methods,
+    Peptides,
+    purrr (>= 1.0.0),
+    readxl,
+    rlang,
+    ShortRead,
+    stringdist,
+    tibble,
+    tidyr,
+    writexl
