@@ -209,7 +209,7 @@ financing decree n. 1015 of 07/07/2023
 If you use **aasv** in your research, please cite:
 
 > Gruppuso L.,Brunelli N., Voyron S., Bertolino D., Roggero A., Palestrini C.,
-> Laini A. (2024). *aasv: an R package for functional
+> Laini A. (2026). *aasv: an R package for functional
 > assessment of COI metabarcoding ASVs*. (in preparation)
 
 ---
