@@ -1,4 +1,4 @@
-# aasv
+# aasv <img src="man/figures/logo.png" align="right" height="139" />
 
 **aasv** is an R package for Windows that provides a complete pipeline for
 assessing whether Amplicon Sequence Variants (ASVs) from COI metabarcoding
