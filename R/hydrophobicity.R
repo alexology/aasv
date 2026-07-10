@@ -7,11 +7,14 @@ get_hydro_metrics <- function(aa_seq, hydro_window) {
   
   # 2. Local Profile (Sliding hydro_window to find 'disasters')
   # We use a hydro_window of 7, typical for alpha-helix spans
-  indices <- seq_len(n - hydro_window + 1)
-  local_profile <- sapply(indices, function(i) {
+  # (n - hydro_window + 1 can be negative when the sequence is shorter than
+  # the window; guard with max(..., 0) so seq_len() never errors and the
+  # profile is simply empty rather than crashing the caller)
+  indices <- seq_len(max(n - hydro_window + 1, 0))
+  local_profile <- vapply(indices, function(i) {
     sub_seq <- substr(aa_str, i, i + hydro_window - 1)
     Peptides::hydrophobicity(sub_seq, scale = "KyteDoolittle")
-  })
+  }, numeric(1))
   
   return(list(global = global_score, profile = local_profile))
 }

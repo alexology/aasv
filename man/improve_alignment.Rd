@@ -4,7 +4,7 @@
 \alias{improve_alignment}
 \title{Improve problematic alignments}
 \usage{
-improve_alignment(paths, print_messages = TRUE, ...)
+improve_alignment(paths, print_messages = TRUE, log_dir = NULL, ...)
 }
 \arguments{
 \item{paths}{Character vector of file paths to problematic alignments,
@@ -12,6 +12,12 @@ as returned by \code{\link{check_alignment}}.}
 
 \item{print_messages}{Print a progress message for each processed file
 reporting how many sequences were retained. Default \code{TRUE}.}
+
+\item{log_dir}{Optional path to a directory where a removal log will be
+written. A file \code{removed_sequences.tsv} is created (or appended to)
+with one row per removed sequence recording the source file, taxon name,
+sequence ID, and the before/after counts. If \code{NULL} (the default),
+no log is written.}
 
 \item{...}{Further arguments passed to \code{AlignSeqs} and
 \code{AlignProfiles} of the \code{DECIPHER} package. Use

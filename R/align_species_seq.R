@@ -85,6 +85,9 @@ align_species_seq <- function(taxonomy = NULL,
   old_timeout <- options(timeout = timeout)
   on.exit(options(old_timeout), add = TRUE)
 
+  tmp_download <- tempfile(fileext = ".jsonl")
+  on.exit(unlink(tmp_download, force = TRUE), add = TRUE)
+
   parse_record <- function(x) {
     tryCatch({
       r <- jsonlite::fromJSON(x, simplifyDataFrame = FALSE)
@@ -97,11 +100,23 @@ align_species_seq <- function(taxonomy = NULL,
     }, error = function(e) NULL)
   }
 
+  parse_paged_record <- function(r) {
+    tibble::tibble(
+      processid      = r$processid      %||% NA_character_,
+      identification = r$identification %||% NA_character_,
+      marker         = r$marker_code    %||% NA_character_,
+      sequence       = r$nuc            %||% NA_character_
+    )
+  }
+
   for (taxon in families) {
 
     if (dir.exists(file.path(alignment_dir, "raw_sequences", taxon)) && !overwrite) {
       next()
     }
+
+    message(taxon, ": querying BOLD...")
+    retry_perform <- make_retry_performer()
 
     for (d in c("raw_sequences", "raw_sequences_nt", "alignments", "aa_tables")) {
       dir.create(file.path(alignment_dir, d, taxon), showWarnings = FALSE)
@@ -117,7 +132,8 @@ align_species_seq <- function(taxonomy = NULL,
         query = paste0("tax:family:", taxon),
         extent = "full"
       ) |>
-      httr2::req_perform() |>
+      httr2::req_timeout(120) |>
+      retry_perform() |>
       httr2::resp_body_json() |>
       purrr::pluck("query_id")
 
@@ -132,7 +148,8 @@ align_species_seq <- function(taxonomy = NULL,
     for (i in seq_len(12)) {
       n_records <- httr2::request(doc_url) |>
         httr2::req_url_query(length = 0L, start = 0L) |>
-        httr2::req_perform() |>
+        httr2::req_timeout(120) |>
+        retry_perform() |>
         httr2::resp_body_json() |>
         purrr::pluck("recordsTotal", .default = 0L)
       if (n_records > 0L) break
@@ -144,20 +161,74 @@ align_species_seq <- function(taxonomy = NULL,
       next()
     }
 
-    content <- httr2::request(paste0(doc_url, "/download?format=json")) |>
-      httr2::req_perform() |>
-      httr2::resp_body_string()
+    fetch_paged <- function(page_size = 50000L) {
+      start  <- 0L
+      result <- list()
 
-    lines <- strsplit(content, "\n", fixed = TRUE)[[1]]
-    lines <- lines[nzchar(trimws(lines))]
+      repeat {
+        end_idx <- min(start + page_size, n_records)
+        message(taxon, ": fetching records ", start + 1L,
+                "–", end_idx, " of ", n_records, "...")
 
-    id_query_info <- purrr::map(lines, parse_record) |>
-      purrr::list_rbind() |>
-      dplyr::filter(
-        marker == "COI-5P",
-        !is.na(sequence),
-        sequence != ""
-      )
+        page <- httr2::request(doc_url) |>
+          httr2::req_url_query(length = page_size, start = start) |>
+          httr2::req_timeout(timeout) |>
+          httr2::req_options(
+            connecttimeout  = 60L,
+            low_speed_limit = 100L,
+            low_speed_time  = 120L
+          ) |>
+          retry_perform() |>
+          httr2::resp_body_json()
+
+        records <- page$data
+        if (length(records) == 0L) break
+
+        batch <- purrr::map(records, parse_paged_record) |>
+          purrr::list_rbind() |>
+          dplyr::filter(marker == "COI-5P", !is.na(sequence), sequence != "")
+
+        result[[length(result) + 1L]] <- batch
+        start <- start + page_size
+        if (length(records) < page_size) break
+      }
+
+      dplyr::bind_rows(result)
+    }
+
+    if (n_records > 100000L) {
+
+      message(taxon, ": large family (", n_records,
+              " records), fetching in pages...")
+      id_query_info <- fetch_paged()
+
+    } else {
+
+      message(taxon, ": downloading ", n_records, " records...")
+      httr2::request(paste0(doc_url, "/download?format=json")) |>
+        httr2::req_timeout(timeout) |>
+        httr2::req_options(
+          connecttimeout  = 60L,
+          low_speed_limit = 100L,
+          low_speed_time  = 120L
+        ) |>
+        retry_perform(path = tmp_download)
+
+      lines <- readLines(tmp_download, warn = FALSE)
+      lines <- lines[nzchar(trimws(lines))]
+      message(taxon, ": ", length(lines), " records received")
+
+      if (length(lines) < n_records) {
+        warning(taxon, ": expected ", n_records, " records but downloaded ",
+                length(lines), " — BOLD may have truncated the response.",
+                call. = FALSE)
+      }
+
+      id_query_info <- purrr::map(lines, parse_record) |>
+        purrr::list_rbind() |>
+        dplyr::filter(marker == "COI-5P", !is.na(sequence), sequence != "")
+
+    }
     
     
     

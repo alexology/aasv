@@ -261,26 +261,21 @@ aa_similarity_score <- function(folder_path = NULL,
           aa_temp <- a_tbl_i %>%
             dplyr::filter(seq_id == unique_right_names[k])
 
-          aa_temp_sequence <- paste(aa_temp$aa, collapse = "")
-
-          # ali_i_temp <- ali_i[which(names(ali_i) %in% unique_right_names[k])]
-          ali_i_temp <- ali_i[which(names(ali_i) %in% query_i)] %>%
+          # aligned string for THIS reference (was erroneously re-reading the
+          # query's own aligned string on every iteration, so every reference
+          # was compared against the query's offset instead of its own)
+          ali_i_temp <- ali_i[which(names(ali_i) %in% unique_right_names[k])] %>%
             as.character()
 
-          # aa_position_start <- Biostrings::vmatchPattern(aa_temp_sequence, ali_i_temp)
-
-
-          aa_position_start <- sum(unlist(strsplit(ali_i_temp, "")) == "-")
-
-
-          if(length(aa_position_start) == 0){
+          if(length(ali_i_temp) == 0){
             next()
-          } else {
-            # real_position <- ali_position - aa_position_start[[1]]@start + 1
-            real_position <- ali_position + aa_position_start
           }
 
-
+          # convert the alignment-column index (ali_position) into this
+          # reference's own ungapped aa_table position, by counting its
+          # non-gap characters up to that column - robust to internal gaps,
+          # matching the equivalent idiom used in calculate_asv_distance.R
+          real_position <- nchar(gsub("-", "", substring(ali_i_temp, 1, ali_position)))
 
           triplet <- aa_temp %>%
             dplyr::filter(position == real_position) %>%

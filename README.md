@@ -13,8 +13,10 @@ Given a set of query ASVs with their taxonomy, the package:
    flag unusual substitutions
 5. Optionally maps raw reads back to each ASV with VSEARCH to assess codon
    quality
-6. Classifies each ASV as likely real or as a potential artefact (lab error
-   or NUMT) based on Grantham distance, hydrophobicity, and read quality
+6. Computes a Functionality Index (FI) for each ASV — a continuous 0-1 score
+   of how compatible the sequence is with a functional mitochondrial COI
+   protein, based on codon position, amino-acid conservation, Grantham
+   distance, and hydrophobicity shift
 
 ---
 
@@ -66,10 +68,13 @@ check_alignment()     ← flags alignments with internal gaps
 improve_alignment()   ← removes offending sequences and re-aligns iteratively
         │
         ▼
+filter_divergent_seq()   ← optionally drops residual genetic outliers
+        │
+        ▼
 asv_functional_structure()   ← compares each ASV against the reference database
         │
         ▼
-classify_asv()        ← returns a per-ASV verdict (IS_REAL TRUE / FALSE)
+classify_asv()        ← returns a per-ASV Functionality Index (FI) and Class
 ```
 
 ---
@@ -104,13 +109,22 @@ align_family_seq(alignment_dir = "results/alignments")
 ```r
 # Inspect for internal gaps at the species level
 bad <- check_alignment(
-  taxon       = "Baetidae",
-  folder_path = "results/alignments",
-  tax_lev     = "species"
+  taxon         = "Baetidae",
+  alignment_dir = "results/alignments",
+  tax_lev       = "species"
 )
 
 # Iteratively remove gap-causing sequences and re-align
 if (length(bad) > 0) improve_alignment(bad)
+
+# Optionally, drop sequences that are still genetically divergent from
+# every other sequence in their species-level alignment (misidentification,
+# contamination, NUMTs) - run after improve_alignment()
+species_alignments <- list.files(
+  "results/alignments/Baetidae/species",
+  full.names = TRUE, pattern = "\\.fasta$"
+)
+filter_divergent_seq(species_alignments)
 ```
 
 ### Step 3 — Functional analysis
@@ -142,13 +156,21 @@ asv_functional_structure(
 
 ```r
 report <- classify_asv(
-  output_dir          = "results",
-  grantham_threshold  = 50,
-  quality_threshold   = 0.999,
-  include_hydro       = TRUE
+  output_dir           = "results",
+  grantham_max          = 215,
+  quality_threshold     = 0.999,
+  include_position      = TRUE,
+  include_grantham      = TRUE,
+  include_quality       = TRUE,
+  include_hydro         = TRUE,
+  include_conservation  = TRUE,
+  conservation_k        = 20
 )
 
-# report has columns: ASV_id, tax_lev, IS_REAL, REASON, ...
+# report has columns: ASV_id, tax_lev, FI, Class, mean_conservation_weight,
+# mean_conservation_confidence, mean_normalized_grantham, normalized_hydro,
+# mean_site_penalty, n_pos1, n_pos2, codon_penalty, total_penalty, Evidence,
+# n_aa_substitutions, n_flagged_aa_substitutions, n_ref_sequences
 head(report)
 ```
 
@@ -163,9 +185,10 @@ head(report)
 | `align_family_seq()` | Merge genus alignments into a family-level profile |
 | `check_alignment()` | Detect alignments with internal gaps |
 | `improve_alignment()` | Iteratively remove gap-causing sequences and re-align |
+| `filter_divergent_seq()` | Remove sequences too genetically divergent from the rest of their species alignment |
 | `re_align()` | Re-align an existing alignment with new parameters |
 | `asv_functional_structure()` | Run functional analysis for all ASVs |
-| `classify_asv()` | Classify ASVs as real or artefact |
+| `classify_asv()` | Compute the COI Functionality Index (FI) for each ASV |
 | `aa_similarity_matrix()` | Compute pairwise codon similarity matrix |
 | `aa_similarity_score()` | Score ASV substitutions against reference codons |
 
@@ -173,23 +196,66 @@ head(report)
 
 ## How classification works
 
-For each ASV, `classify_asv()` applies a hierarchical check:
+`classify_asv()` computes a **Functionality Index (FI)**: a continuous 0-1
+score of how compatible a query sequence is with the evolutionary constraints
+expected of a functional mitochondrial COI protein. FI is a compatibility
+score, not an estimate of the probability that a sequence is mitochondrial
+vs. nuclear (NUMT) in origin.
 
-1. **Alignment gap check** — if the ASV introduces internal gaps when aligned
-   to the reference, it is flagged immediately (`IS_REAL = FALSE`)
-2. **Substitution check** — for each amino acid position where the ASV
-   carries a substitution not seen in the reference database:
-   - *Codon position*: mutations at wobble positions (position 3) are less
-     penalised than those at positions 1–2 (Forbidden Zone)
-   - *Grantham distance*: radical amino acid changes (> threshold) are
-     penalised
-   - *Sequencing quality* (optional, requires VSEARCH): low-quality codons
-     are penalised; `NA` quality (no VSEARCH) passes this check
-3. **Hydrophobicity check** (optional) — the global hydrophobicity score and
-   the local profile of the ASV are compared against the reference envelope
+1. **Hard incompatibility check** — if the ASV introduces internal gaps when
+   aligned to the reference (a premature stop codon, frameshift, or
+   non-triplet indel), `FI = 0` and the ASV is classified *"Severe
+   incompatibility with functional COI."*, skipping the checks below.
+2. **Soft site-level penalty** — for sequences with a valid ORF, every
+   amino-acid position where the ASV differs from the reference database
+   contributes a `site_penalty = conservation_weight × normalized_grantham`:
+   - *Conservation weight* (toggle `include_conservation`): how invariant
+     that position is across the family-level reference alignment
+     (Shannon entropy-based), discounted by a confidence factor `1 -
+     exp(-n_ref / conservation_k)` that grows with the number of reference
+     sequences behind the position — a position that merely looks invariant
+     because only a couple of references cover it is trusted less than the
+     same apparent conservation backed by hundreds
+   - *Grantham distance* (toggle `include_grantham`, normalized by
+     `grantham_max`) is the position's biochemical severity
+   - *Sequencing quality* (toggle `include_quality`, requires VSEARCH):
+     positions below `quality_threshold` are excluded from scoring entirely,
+     since the call cannot be trusted; `NA` quality (no VSEARCH) is always
+     treated as reliable
+3. **Codon-position penalty** (toggle `include_position`) — second-codon-
+   position substitutions are weighted twice as heavily as first-position
+   ones; synonymous third-position-only changes contribute nothing
+4. **Sequence-level hydrophobicity penalty** (toggle `include_hydro`) — the
+   query's local violation rate against the family hydrophobicity envelope
+   is a whole-protein property, not a per-residue one, so it is kept as an
+   independent term rather than being repeated across every mutated site
 
-The worst result across all mutations and all available taxonomic levels
-determines the final verdict.
+The mean site penalty (35%), the codon-position penalty (30%), and the
+sequence-level hydrophobicity term (35%) combine into a total penalty, and
+`FI = 1 - total_penalty`. The resulting `Class` is one of:
+
+| FI range | Class |
+|---|---|
+| ≥ 0.90 | Plausible functional sequence |
+| < 0.90 | Artifact-NUMTs candidate |
+| (hard incompatibility) | Severe incompatibility with functional COI. |
+
+Each `include_*` toggle defaults to `TRUE`; disabling one removes that
+evidence source from the score entirely. FI is reported per ASV per
+taxonomic level with a human-readable `Evidence` string, alongside every
+submetric that fed into it: `mean_conservation_weight`,
+`mean_conservation_confidence` (the raw `1 - exp(-n_ref / conservation_k)`
+factor, reported separately from the weight it discounts),
+`mean_normalized_grantham`, `normalized_hydro`, `mean_site_penalty`,
+`n_pos1`/`n_pos2`, `codon_penalty`, and `total_penalty` - so the FI
+computation can be audited row by row.
+
+`classify_asv()` reports every ASV/taxonomic-level combination that was
+processed upstream, not only the ones with a flagged amino-acid
+substitution: an ASV whose ORF matches the reference at every position never
+gets an `<ASV_id>_aa_structure.xlsx` file, but it is still listed (with
+`n_aa_substitutions = 0`) as long as it appears in `hydrophobicity.xlsx`.
+
 ---
 
 ## Acknowledgments

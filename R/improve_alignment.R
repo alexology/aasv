@@ -8,6 +8,11 @@
 #'   as returned by \code{\link{check_alignment}}.
 #' @param print_messages Print a progress message for each processed file
 #'   reporting how many sequences were retained. Default \code{TRUE}.
+#' @param log_dir Optional path to a directory where a removal log will be
+#'   written. A file \code{removed_sequences.tsv} is created (or appended to)
+#'   with one row per removed sequence recording the source file, taxon name,
+#'   sequence ID, and the before/after counts. If \code{NULL} (the default),
+#'   no log is written.
 #' @param ... Further arguments passed to \code{AlignSeqs} and
 #'   \code{AlignProfiles} of the \code{DECIPHER} package. Use
 #'   \code{verbose = FALSE} here to suppress DECIPHER's console output.
@@ -61,10 +66,12 @@
 #' @importFrom Biostrings readAAStringSet writeXStringSet width AAStringSet
 #' @importFrom DECIPHER AlignSeqs AlignProfiles
 #' @importFrom stats setNames
+#' @importFrom utils write.table
 #'
 #' @export
 
-improve_alignment <- function(paths, print_messages = TRUE, ...) {
+improve_alignment <- function(paths, print_messages = TRUE,
+                             log_dir = NULL, ...) {
 
   # --- helpers ---------------------------------------------------------------
 
@@ -117,26 +124,6 @@ improve_alignment <- function(paths, print_messages = TRUE, ...) {
       result <- DECIPHER::AlignProfiles(result, aligned[[i]])
     }
     result
-  }
-
-  causes_internal_gaps <- function(mat) {
-    nc      <- ncol(mat)
-    non_gap <- mat != "-"
-    seq_starts <- apply(non_gap, 1L, function(r) {
-      w <- which(r)
-      if (length(w)) w[1L] else nc + 1L
-    })
-    seq_ends <- apply(non_gap, 1L, function(r) {
-      w <- which(r)
-      if (length(w)) w[length(w)] else 0L
-    })
-    cols     <- seq_len(nc)
-    spanning <- outer(seq_starts, cols, "<=") &
-                outer(seq_ends,   cols, ">=")
-    n_spanning        <- colSums(spanning)
-    n_internal_gap    <- colSums(spanning & !non_gap)
-    internal_gap_frac <- ifelse(n_spanning > 1L, n_internal_gap / n_spanning, 0)
-    apply(non_gap, 1L, function(r) any(r & (internal_gap_frac > 0.5)))
   }
 
   has_self_gap <- function(mat) {
@@ -197,6 +184,14 @@ improve_alignment <- function(paths, print_messages = TRUE, ...) {
     list(ali_reps = NULL, dd = dd, all_names = all_names, done = FALSE)
   }
 
+  # --- logging setup ---------------------------------------------------------
+
+  if (!is.null(log_dir)) {
+    dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+    log_file   <- file.path(log_dir, "removed_sequences.tsv")
+    log_header <- !file.exists(log_file) || file.size(log_file) == 0L
+  }
+
   # --- main loop -------------------------------------------------------------
 
   for (ali_file in paths) {
@@ -207,9 +202,10 @@ improve_alignment <- function(paths, print_messages = TRUE, ...) {
 
     if (n_start == 0L) next()
 
-    seqs      <- strip_gaps(ali)
-    dd        <- dedup_seqs(seqs)
-    all_names <- names(seqs)
+    seqs           <- strip_gaps(ali)
+    initial_names  <- names(seqs)
+    dd             <- dedup_seqs(seqs)
+    all_names      <- names(seqs)
     t_start   <- proc.time()[["elapsed"]]
     t_last    <- t_start
     iter      <- 0L
@@ -266,6 +262,28 @@ improve_alignment <- function(paths, print_messages = TRUE, ...) {
                                 filepath = ali_file,
                                 width    = max(Biostrings::width(ali_out)) + 1L,
                                 format   = "fasta")
+
+    if (!is.null(log_dir)) {
+      removed <- setdiff(initial_names, all_names)
+      if (length(removed) > 0L) {
+        log_df <- data.frame(
+          file       = basename(ali_file),
+          taxon      = taxon_name,
+          sequence   = removed,
+          n_start    = n_start,
+          n_retained = length(ali_out),
+          stringsAsFactors = FALSE
+        )
+        write.table(log_df,
+                    file      = log_file,
+                    sep       = "\t",
+                    row.names = FALSE,
+                    col.names = log_header,
+                    append    = !log_header,
+                    quote     = FALSE)
+        log_header <- FALSE
+      }
+    }
 
     if (print_messages) {
       message(taxon_name, ": ", length(ali_out), "/", n_start,

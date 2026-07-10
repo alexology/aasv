@@ -1,3 +1,47 @@
+# Factory: returns a performer closure with shared exponential-backoff state.
+# Each failure increments the level; each success decays it by one (not a full
+# reset), so the backoff stays elevated while the server is struggling and
+# gradually drops back as requests start succeeding again.
+# Permanent client errors (4xx, other than 408/429 which are transient) are
+# not retried: they signal a bad request (e.g. an invalid taxon query) that
+# will never succeed, so they are re-raised immediately instead of retrying
+# forever.
+# Interrupt with Ctrl+C to abort.
+make_retry_performer <- function(initial_wait = 60, max_wait = 7200) {
+  state <- new.env(parent = emptyenv())
+  state$level <- 0L
+
+  function(req, path = NULL) {
+    repeat {
+      state$level <- state$level + 1L
+      if (!is.null(path) && file.exists(path)) unlink(path)
+      result <- tryCatch(
+        httr2::req_perform(req, path = path),
+        error = function(e) {
+          status <- e$status
+          if (!is.null(status) && status >= 400L && status < 500L &&
+              !(status %in% c(408L, 429L))) {
+            stop(e)
+          }
+          NULL
+        }
+      )
+      if (!is.null(result)) {
+        state$level <- max(0L, state$level - 1L)
+        return(result)
+      }
+      pause    <- min(initial_wait * 2^(state$level - 1L), max_wait)
+      wait_msg <- if (pause >= 60) paste0(round(pause / 60, 1), " min") else paste0(pause, "s")
+      message("Request failed (attempt ", state$level, "), retrying in ", wait_msg, "…")
+      Sys.sleep(pause)
+    }
+  }
+}
+
+req_perform_retry <- function(req, initial_wait = 60, max_wait = 7200) {
+  make_retry_performer(initial_wait, max_wait)(req)
+}
+
 # https://stackoverflow.com/questions/12403312/find-the-number-of-spaces-in-a-string
 countSpaces <- function(s) {
   sapply(gregexpr(" ", s), function(p) sum(p >= 0))
@@ -76,6 +120,26 @@ inner_gaps <- function(x) {
   }
 
   logical_store
+}
+
+causes_internal_gaps <- function(mat) {
+  nc      <- ncol(mat)
+  non_gap <- mat != "-"
+  seq_starts <- apply(non_gap, 1L, function(r) {
+    w <- which(r)
+    if (length(w)) w[1L] else nc + 1L
+  })
+  seq_ends <- apply(non_gap, 1L, function(r) {
+    w <- which(r)
+    if (length(w)) w[length(w)] else 0L
+  })
+  cols     <- seq_len(nc)
+  spanning <- outer(seq_starts, cols, "<=") &
+              outer(seq_ends,   cols, ">=")
+  n_spanning        <- colSums(spanning)
+  n_internal_gap    <- colSums(spanning & !non_gap)
+  internal_gap_frac <- ifelse(n_spanning > 1L, n_internal_gap / n_spanning, 0)
+  apply(non_gap, 1L, function(r) any(r & (internal_gap_frac > 0.5)))
 }
 
 grantham_score <- function(x) {

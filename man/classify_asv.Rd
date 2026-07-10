@@ -2,40 +2,164 @@
 % Please edit documentation in R/classify_asv.R
 \name{classify_asv}
 \alias{classify_asv}
-\title{Filter ASV by functional properties}
+\title{COI Functionality Index for ASVs}
 \usage{
 classify_asv(
   output_dir,
-  grantham_threshold = 50,
+  grantham_max = 215,
   quality_threshold = 0.999,
-  include_hydro = TRUE
+  include_position = TRUE,
+  include_grantham = TRUE,
+  include_quality = TRUE,
+  include_hydro = TRUE,
+  include_conservation = TRUE,
+  conservation_k = 20
 )
 }
 \arguments{
 \item{output_dir}{Folder where the results of functional calculation are stored.}
 
-\item{grantham_threshold}{The threshold to retain an amino acid substitution as functional.}
+\item{grantham_max}{Normalization ceiling for Grantham distance (default
+\code{215}, the theoretical maximum of the Grantham scale). Only used
+when \code{include_grantham = TRUE}.}
 
-\item{quality_threshold}{Minimum probability to retain a codon. Ignored for
-mutations where \code{median_quality_prob} is \code{NA} (i.e. when VSEARCH
-read-back was not run); those mutations are treated as passing quality.}
+\item{quality_threshold}{Minimum per-codon sequencing-quality probability
+for a mutated position to be treated as reliable evidence. Only used
+when \code{include_quality = TRUE}. Mutations with
+\code{median_quality_prob} below this threshold are excluded from the FI
+calculation entirely (the call cannot be trusted, so it neither helps
+nor hurts the score). Mutations where \code{median_quality_prob} is
+\code{NA} (i.e. when VSEARCH read-back was not run) are always treated
+as reliable.}
 
-\item{include_hydro}{If \code{TRUE} includes the hydrophobicity assessment.}
+\item{include_position}{If \code{TRUE} (default) the codon-position
+penalty (first/second codon position substitutions) contributes to the
+total penalty.}
+
+\item{include_grantham}{If \code{TRUE} (default) the (normalized) Grantham
+distance contributes to each mutated site's penalty.}
+
+\item{include_quality}{If \code{TRUE} (default) mutated positions with
+low read-back quality are excluded from the FI calculation.}
+
+\item{include_hydro}{If \code{TRUE} (default) the sequence's local
+hydrophobicity-profile violation rate (against the family reference
+envelope) contributes to the total penalty as an independent,
+sequence-level term (it is not tied to any individual mutated site).}
+
+\item{include_conservation}{If \code{TRUE} (default) each mutated site's
+penalty is weighted by how conserved that position is across the
+family-level reference alignment (an amino-acid change at an invariant
+position counts far more than the same change at a naturally variable
+position). If \code{FALSE}, every site is treated as maximally
+conserved.}
+
+\item{conservation_k}{Scaling constant (default \code{20}) controlling how
+quickly confidence in the conservation estimate grows with the number of
+reference sequences behind a mutated position. The raw entropy-based
+conservation weight is multiplied by a confidence factor \code{1 -
+exp(-n_ref / conservation_k)}, so a position "conserved" across only two
+reference sequences counts for much less than the same apparent
+conservation backed by hundreds of references. Positions with an unknown
+reference count (\code{n_ref_sequences} is \code{NA}) are left
+un-adjusted. Only used when \code{include_conservation = TRUE}.}
 }
 \value{
-A data frame with one row per ASV per taxonomic level, with columns
-  \code{ASV_id}, \code{tax_lev}, \code{IS_REAL}, \code{REASON},
-  \code{max_of_best_grantham}, and \code{min_of_best_quality}.
+A data frame with one row per ASV per taxonomic level - covering
+  every ASV/level combination processed upstream, not only ones with a
+  flagged amino-acid substitution (an ASV whose ORF matches the reference
+  at every position still gets a row, sourced from the hydrophobicity
+  summary, with \code{n_aa_substitutions = 0}) - with columns
+  \code{ASV_id}, \code{tax_lev}, \code{FI} (the Functionality Index,
+  \code{0}-\code{1}), \code{Class} (the interpretation band: "Plausible
+  functional sequence" (\code{FI >= 0.90}), "Artifact-NUMTs candidate"
+  (\code{FI < 0.90}), or "Severe incompatibility with functional COI."
+  for a hard ORF incompatibility), and the submetrics that combine into
+  \code{FI}:
+  \itemize{
+    \item \code{mean_conservation_weight} - average, confidence-adjusted
+      \code{conservation_weight} across mutated sites (\code{NA} when there
+      are none)
+    \item \code{mean_conservation_confidence} - average of the raw
+      confidence factor \code{1 - exp(-n_ref / conservation_k)} itself,
+      reported separately from \code{mean_conservation_weight} so it's
+      clear how much the entropy-based weight was discounted for sparse
+      reference coverage (\code{NA} when there are no mutated sites)
+    \item \code{mean_normalized_grantham} - average normalized Grantham
+      distance across mutated sites (\code{NA} when there are none)
+    \item \code{normalized_hydro} - the sequence's normalized local
+      hydrophobicity violation rate, an independent sequence-level metric
+      (\code{0} when \code{include_hydro = FALSE})
+    \item \code{mean_site_penalty} - the averaged per-site penalty, based
+      on conservation and Grantham distance only (\code{0} when there are
+      no mutated sites)
+    \item \code{n_pos1}, \code{n_pos2} - number of mutated sites with a
+      first/second codon-position change (\code{Npos1}/\code{Npos2})
+    \item \code{codon_penalty} - the codon-position penalty
+    \item \code{total_penalty} - \code{0.35 * mean_site_penalty + 0.3 *
+      codon_penalty + 0.35 * normalized_hydro}, i.e. \code{1 - FI} before
+      the \code{[0, 1]} bound
+  }
+  as well as \code{Evidence} (a human-readable summary),
+  \code{n_aa_substitutions} (number of mutated amino-acid positions found
+  at that taxonomic level), \code{n_flagged_aa_substitutions} (how many of
+  those positions contributed a nonzero site penalty), and
+  \code{n_ref_sequences} (the number of reference sequences the
+  comparison was based on - the weakest-covered mutated position sets
+  this value, and it is \code{NA} when no reference-backed mutation data
+  is available; a low count means the score rests on thin evidence).
 }
 \description{
-This function takes ASVs functional description as input to classify them as 
-as laboratory artifact or NUMTs.
+Computes a Functionality Index (FI) for each ASV/haplotype: a continuous
+0-1 score quantifying how compatible a query sequence is with the
+evolutionary constraints expected of a functional mitochondrial COI
+protein. FI is a compatibility score, not an estimate of the probability
+that a sequence is mitochondrial vs. nuclear (NUMT) in origin - see
+\strong{Details}.
 }
 \details{
-The function \code{classify_asv} uses hydrophobicity and functional results to
-to assess if an ASV is likely a laboratory error or a NUMT. For each mutation, this 
-function select the best result among those available for each taxonomic level separately.
-When an ASV has more than one mutation, the worst result is choosen to provide
-the final assessment. Since hydrophobicity is often penalizing and the user can 
-decide to include it or not in the evaluation.
+For each ASV and taxonomic level, the query is first checked for hard
+incompatibilities with a functional open reading frame: a premature stop
+codon, a frameshift, a non-triplet indel, or an otherwise invalid/
+incomplete ORF. In the current implementation these are all detected
+collectively via the alignment-gap signal already produced upstream by
+\code{\link{calculate_asv_distance}} (an internal gap in the query's
+alignment to the reference profile); if present, \code{FI = 0} and the
+sequence is classified \emph{"Severe incompatibility with functional
+COI."}, bypassing the soft-penalty calculation below.
+
+For sequences with a valid ORF, a soft penalty is computed for each
+mutated amino-acid position (a position where the query's amino acid
+does not match any reference at that taxonomic level):
+
+\code{site_penalty = conservation_weight * normalized_grantham}, where
+\code{normalized_grantham} is the Grantham distance normalized by
+\code{grantham_max}, and \code{conservation_weight = (1 -
+normalized_entropy) * (1 - exp(-n_ref / conservation_k))}. The first
+factor is one minus the Shannon entropy of the reference amino acids
+observed at that position (normalized by \code{log(20)}); the second is a
+confidence factor that discounts conservation estimates built from few
+reference sequences (\code{n_ref} - see \code{conservation_k}), so a
+position that merely appears invariant because only two references cover
+it is not treated as strongly conserved as one backed by hundreds.
+
+Per-site penalties are averaged into \code{mean_site_penalty} and
+combined with a codon-position penalty, \code{codon_penalty = (Npos1 + 2 *
+Npos2) / (2 * Nmut)} (weighting second-codon-position substitutions twice
+as heavily as first-position ones and synonymous third-position changes at
+zero), and a sequence-level hydrophobicity term, \code{normalized_hydro}
+(the query's local violation rate against the family hydrophobicity
+envelope, computed by \code{\link{calculate_asv_distance}}). Hydrophobicity
+is a whole-protein property rather than a per-residue one, so it is kept
+as an independent, sequence-level component instead of being folded into
+\code{site_penalty} - assigning the same sequence-level value to every
+mutated site would otherwise let it count as evidence once per mutation.
+The total penalty is \code{0.35 * mean_site_penalty + 0.3 * codon_penalty
++ 0.35 * normalized_hydro}, and \code{FI = 1 - total_penalty}, bounded to
+\code{[0, 1]}.
+
+The Functionality Index estimates compatibility with functional COI
+evolution based on codon position, amino-acid conservation, Grantham
+distance, and hydrophobicity shift. It should not be interpreted as a
+definitive classification of NUMT versus mitochondrial origin.
 }

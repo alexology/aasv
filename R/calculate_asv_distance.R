@@ -51,9 +51,15 @@ calculate_asv_distance <- function(output_dir,
   # write to disk
   Biostrings::writeXStringSet(aln, aln_save)
   
-  # check if query ha inner gaps, if yes end the function prematurely
-  query_has_ig <- inner_gaps(as.matrix(aln))[1]
-  
+  # check if the query has inner gaps (a deletion relative to the reference
+  # profile) OR forces gap-opening in most reference sequences (an insertion
+  # not shared by any reference) - either case is a structural incompatibility
+  # with a functional, indel-free COI ORF, so end the function prematurely
+  aln_mat       <- as.matrix(aln)
+  query_row     <- which(names(aln) == query_id)
+  query_has_ig  <- inner_gaps(aln_mat)[query_row] ||
+                     causes_internal_gaps(aln_mat)[query_row]
+
   if(query_has_ig){
     hydro_results <- data.frame(global_min = numeric(),
                                 global_max = numeric(),
@@ -136,7 +142,7 @@ calculate_asv_distance <- function(output_dir,
   
   
   ### hydrophobicity module ----------------------------------------------------
-  aa_mat <- as.matrix(aln)
+  aa_mat <- aln_mat
   
   # find the position of the ending dash in the query sequences
   match_data <- regexpr("-+$", as.character(aln[which(rownames(aa_mat) %in% query_id)]))
@@ -145,10 +151,11 @@ calculate_asv_distance <- function(output_dir,
   # match_data returns the starting index of the match
   first_dash_pos <- as.integer(match_data)
   
-  # Handle cases with no dashes (regexpr returns -1 if no match)
+  # Handle cases with no dashes (regexpr returns -1 if no match). final_pos is
+  # used below as an exclusive upper bound (final_pos - 1), so the no-dash case
+  # must be ncol(aa_mat) + 1 or the alignment's last column is silently dropped.
   if(first_dash_pos == -1) {
-    # Option A: Return 0 or NA if no trailing dashes
-    final_pos <- ncol(aa_mat) 
+    final_pos <- ncol(aa_mat) + 1
   } else {
     final_pos <- first_dash_pos
   }
@@ -172,7 +179,7 @@ calculate_asv_distance <- function(output_dir,
   n_gaps_cover  <- apply(aa_mat_q_gaps, 1, function(x) sum(x == "-"))
   aa_mat_q_gaps <- aa_mat_q_gaps[n_gaps_cover == 0, , drop = FALSE]
   
-  if(nrow(aa_mat_q_gaps) == 0){
+  if(nrow(aa_mat_q_gaps) == 0 || ncol(aa_mat_q_gaps) < hydro_window){
     hydro_results <- data.frame(global_min = numeric(),
                                 global_max = numeric(),
                                 global_score = numeric(),

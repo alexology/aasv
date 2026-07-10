@@ -103,6 +103,39 @@ test_that("inner_gaps returns a logical vector of length equal to nrow", {
   expect_length(result, 3L)
 })
 
+# --- causes_internal_gaps -----------------------------------------------------
+
+test_that("causes_internal_gaps flags a sequence that inserts residues absent from all others", {
+  # row 1 has a residue at column 3 where every other (spanning) row is gapped:
+  # row 1 is forcing an internal gap into rows 2-4, not carrying one itself.
+  m <- matrix(c("A", "C", "X", "E", "F",
+                "A", "C", "-", "E", "F",
+                "A", "C", "-", "E", "F",
+                "A", "C", "-", "E", "F"),
+              nrow = 4L, byrow = TRUE)
+  result <- aasv:::causes_internal_gaps(m)
+  expect_true(result[1L])
+  expect_false(any(result[2:4]))
+})
+
+test_that("causes_internal_gaps does not flag a normal alignment", {
+  m <- matrix(c("A", "C", "D", "E", "F",
+                "A", "C", "D", "E", "F",
+                "A", "C", "D", "E", "F"),
+              nrow = 3L, byrow = TRUE)
+  result <- aasv:::causes_internal_gaps(m)
+  expect_false(any(result))
+})
+
+test_that("causes_internal_gaps ignores terminal gaps (shorter sequences, not insertions)", {
+  m <- matrix(c("A", "C", "D", "E", "F",
+                "-", "-", "D", "E", "F",
+                "A", "C", "D", "E", "-"),
+              nrow = 3L, byrow = TRUE)
+  result <- aasv:::causes_internal_gaps(m)
+  expect_false(any(result))
+})
+
 # --- best_translation --------------------------------------------------------
 
 test_that("best_translation translates a clean sequence", {
