@@ -267,6 +267,8 @@ a genetic approach to community ecology (META2) ”,
 Project code: 2022PA3BS2 (CUP D53D23008270006), MUR D.D. 
 financing decree n. 1015 of 07/07/2023
 
+Claude Code has been used to check, test and improve existing code.
+
 ---
 
 ## Citation
