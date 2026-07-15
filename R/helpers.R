@@ -32,14 +32,10 @@ make_retry_performer <- function(initial_wait = 60, max_wait = 7200) {
       }
       pause    <- min(initial_wait * 2^(state$level - 1L), max_wait)
       wait_msg <- if (pause >= 60) paste0(round(pause / 60, 1), " min") else paste0(pause, "s")
-      message("Request failed (attempt ", state$level, "), retrying in ", wait_msg, "…")
+      message("Request failed (attempt ", state$level, "), retrying in ", wait_msg, "...")
       Sys.sleep(pause)
     }
   }
-}
-
-req_perform_retry <- function(req, initial_wait = 60, max_wait = 7200) {
-  make_retry_performer(initial_wait, max_wait)(req)
 }
 
 # https://stackoverflow.com/questions/12403312/find-the-number-of-spaces-in-a-string
@@ -55,20 +51,6 @@ remove_minus <- function(x, forward = TRUE) {
   } else {
     for (i in seq_along(x)) {
       if (x[length(x)] == -1) x <- x[-length(x)] else break
-    }
-  }
-  x
-}
-
-replace_minus <- function(x, forward = TRUE) {
-  if (forward) {
-    for (i in seq_along(x)) {
-      if (x[i] == -1) x[i] <- NA else break
-    }
-  } else {
-    for (i in seq_along(x)) {
-      j <- length(x) - i + 1
-      if (x[j] == -1) x[j] <- NA else break
     }
   }
   x
@@ -146,32 +128,6 @@ causes_internal_gaps <- function(mat) {
   n_internal_gap    <- colSums(spanning & !non_gap)
   internal_gap_frac <- ifelse(n_spanning > 1L, n_internal_gap / n_spanning, 0)
   apply(non_gap, 1L, function(r) any(r & (internal_gap_frac > 0.5)))
-}
-
-grantham_score <- function(x) {
-  grantham_thresh <- c(0, 50, 100, 150, 1000)
-  cut(x,
-      grantham_thresh,
-      labels = c("conservative", "moderately conservative",
-                 "moderately radical", "radical"),
-      right = TRUE,
-      include.lowest = TRUE) %>%
-    as.character()
-}
-
-triplet_similarity <- function(x) {
-  triplet_thresh <- c(0, 0.1, 0.33, 0.67, 10)
-  cut(round(x, 2),
-      triplet_thresh,
-      labels = c("radical", "moderately radical",
-                 "moderately conservative", "conservative"),
-      right = TRUE,
-      include.lowest = TRUE) %>%
-    as.character()
-}
-
-phylogeny_score <- function(x) {
-  ifelse(x == 1, "conservative", "radical")
 }
 
 # Produces a codon-level table for a DNAStringSet.

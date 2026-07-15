@@ -45,7 +45,7 @@ of the query sequences.
 This function downloads sequences from BOLD to build a reference database that is used for
 further calculations. Given a set of query species, \code{align_species_seq} downloads
 all the available sequences up to family level. Only the sequences with a full
-species name are retained (e.g. Gorilla sp. is removed). Once the sequences are
+species name are retained (e.g. \emph{Gorilla} sp. is removed). Once the sequences are
 downloaded and filtered, they are aligned for each species separately with
 the function \code{AlignSeqs} of the package \code{DECIPHER}. Raw sequences are
 saved to disk in a folder called \code{raw_sequences}, while the aligned

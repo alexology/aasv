@@ -53,7 +53,7 @@
 #' codon, a frameshift, a non-triplet indel, or an otherwise invalid/
 #' incomplete ORF. In the current implementation these are all detected
 #' collectively via the alignment-gap signal already produced upstream by
-#' \code{\link{calculate_asv_distance}} (an internal gap in the query's
+#' \code{calculate_asv_distance()} (an internal gap in the query's
 #' alignment to the reference profile); if present, \code{FI = 0} and the
 #' sequence is classified \emph{"Severe incompatibility with functional
 #' COI."}, bypassing the soft-penalty calculation below.
@@ -62,31 +62,41 @@
 #' mutated amino-acid position (a position where the query's amino acid
 #' does not match any reference at that taxonomic level):
 #'
-#' \code{site_penalty = conservation_weight * normalized_grantham}, where
+#' \preformatted{site_penalty = conservation_weight * normalized_grantham}
+#'
 #' \code{normalized_grantham} is the Grantham distance normalized by
-#' \code{grantham_max}, and \code{conservation_weight = (1 -
-#' normalized_entropy) * (1 - exp(-n_ref / conservation_k))}. The first
-#' factor is one minus the Shannon entropy of the reference amino acids
-#' observed at that position (normalized by \code{log(20)}); the second is a
-#' confidence factor that discounts conservation estimates built from few
-#' reference sequences (\code{n_ref} - see \code{conservation_k}), so a
-#' position that merely appears invariant because only two references cover
-#' it is not treated as strongly conserved as one backed by hundreds.
+#' \code{grantham_max}. \code{conservation_weight} is:
+#'
+#' \preformatted{conservation_weight = (1 - normalized_entropy) * (1 - exp(-n_ref / conservation_k))}
+#'
+#' The first factor is one minus the Shannon entropy of the reference amino
+#' acids observed at that position (normalized by \code{log(20)}); the
+#' second is a confidence factor that discounts conservation estimates built
+#' from few reference sequences (\code{n_ref} - see \code{conservation_k}),
+#' so a position that merely appears invariant because only two references
+#' cover it is not treated as strongly conserved as one backed by hundreds.
 #'
 #' Per-site penalties are averaged into \code{mean_site_penalty} and
-#' combined with a codon-position penalty, \code{codon_penalty = (Npos1 + 2 *
-#' Npos2) / (2 * Nmut)} (weighting second-codon-position substitutions twice
-#' as heavily as first-position ones and synonymous third-position changes at
-#' zero), and a sequence-level hydrophobicity term, \code{normalized_hydro}
-#' (the query's local violation rate against the family hydrophobicity
-#' envelope, computed by \code{\link{calculate_asv_distance}}). Hydrophobicity
-#' is a whole-protein property rather than a per-residue one, so it is kept
-#' as an independent, sequence-level component instead of being folded into
+#' combined with a codon-position penalty:
+#'
+#' \preformatted{codon_penalty = (Npos1 + 2 * Npos2) / (2 * Nmut)}
+#'
+#' This weights second-codon-position substitutions twice as heavily as
+#' first-position ones, and synonymous third-position changes at zero. A
+#' sequence-level hydrophobicity term, \code{normalized_hydro} (the query's
+#' local violation rate against the family hydrophobicity envelope, computed
+#' by \code{calculate_asv_distance()}), is also added. Hydrophobicity is
+#' a whole-protein property rather than a per-residue one, so it is kept as
+#' an independent, sequence-level component instead of being folded into
 #' \code{site_penalty} - assigning the same sequence-level value to every
 #' mutated site would otherwise let it count as evidence once per mutation.
-#' The total penalty is \code{0.35 * mean_site_penalty + 0.3 * codon_penalty
-#' + 0.35 * normalized_hydro}, and \code{FI = 1 - total_penalty}, bounded to
-#' \code{[0, 1]}.
+#'
+#' The total penalty combines all three terms:
+#'
+#' \preformatted{total_penalty = 0.35 * mean_site_penalty + 0.3 * codon_penalty + 0.35 * normalized_hydro
+#' FI = 1 - total_penalty}
+#'
+#' bounded to \code{[0, 1]}.
 #'
 #' The Functionality Index estimates compatibility with functional COI
 #' evolution based on codon position, amino-acid conservation, Grantham
@@ -159,7 +169,7 @@ classify_asv <- function(output_dir,
 
   log20 <- log(20)
 
-  # ── helpers ─────────────────────────────────────────────────────────────────
+  # -- helpers -----------------------------------------------------------------
   aa3 <- function(aa) {
     if (is.na(aa)) return(NA_character_)
     lookup <- c(
@@ -183,7 +193,7 @@ classify_asv <- function(output_dir,
           labels[length(labels)], "codon positions")
   }
 
-  # ── hydrophobicity ─────────────────────────────────────────────────────────
+  # -- hydrophobicity ---------------------------------------------------------
   # hydro_data is also the authoritative list of every ASV/tax_lev combination
   # ever processed upstream (calculate_asv_distance always records a
   # hydrophobicity result, even for an ASV whose ORF matches the reference at
@@ -205,7 +215,7 @@ classify_asv <- function(output_dir,
       )
   }
 
-  # ── process one aa_structure file ─────────────────────────────────────────
+  # -- process one aa_structure file -----------------------------------------
   process_asv_file <- function(f) {
     df_asv <- readxl::read_xlsx(f)
     if (!"aa_pos" %in% names(df_asv)) return(NULL)
@@ -307,7 +317,7 @@ classify_asv <- function(output_dir,
     all_details <- data.frame(ASV_id = character(), tax_lev = character())
   }
 
-  # ── per-site penalty: conservation + Grantham only ──────────────────────────
+  # -- per-site penalty: conservation + Grantham only --------------------------
   # hydrophobicity is a whole-sequence property (see below) and is kept out of
   # the per-site penalty so it isn't counted once per mutated position.
   if (nrow(all_details) > 0) {
@@ -344,7 +354,7 @@ classify_asv <- function(output_dir,
 
   all_summary <- dplyr::bind_rows(early_summaries, computed_summary)
 
-  # ── list every processed ASV, not only the flagged ones ─────────────────────
+  # -- list every processed ASV, not only the flagged ones ---------------------
   # hydro_data covers every ASV/tax_lev combination that was ever compared
   # against a reference (see note above), so full-joining against it brings in
   # ASVs with a clean ORF at this level - these have no mutated sites at all
@@ -356,7 +366,7 @@ classify_asv <- function(output_dir,
     all_summary$local_violation_rate <- NA_real_
   }
 
-  # ── early exit ────────────────────────────────────────────────────────────
+  # -- early exit ------------------------------------------------------------
   if (nrow(all_summary) == 0) {
     return(data.frame(ASV_id = character(), tax_lev = character(),
                       FI = numeric(), Class = character(),
@@ -379,7 +389,7 @@ classify_asv <- function(output_dir,
     if (!col %in% names(all_summary)) all_summary[[col]] <- NA
   }
 
-  # ── Functionality Index ─────────────────────────────────────────────────────
+  # -- Functionality Index -----------------------------------------------------
   verdicts <- all_summary %>%
     dplyr::mutate(
       has_alignment_gap  = ifelse(is.na(has_alignment_gap), FALSE, has_alignment_gap),
@@ -407,7 +417,7 @@ classify_asv <- function(output_dir,
       )
     )
 
-  # ── evidence strings ───────────────────────────────────────────────────────
+  # -- evidence strings -------------------------------------------------------
   build_evidence <- function(i) {
     row      <- verdicts[i, ]
     asv_id   <- row$ASV_id
@@ -434,7 +444,7 @@ classify_asv <- function(output_dir,
           pos_lab <- codon_pos_label(m$triplet_mut_pos)
           gran    <- m$grantham_dist
 
-          desc <- paste0(from_aa, "→", to_aa, " substitution; ", pos_lab)
+          desc <- paste0(from_aa, "->", to_aa, " substitution; ", pos_lab)
           if (include_grantham && !is.na(gran))
             desc <- paste0(desc, "; Grantham = ", round(gran))
           if (include_conservation)
@@ -464,7 +474,7 @@ classify_asv <- function(output_dir,
 
   evidences <- vapply(seq_len(nrow(verdicts)), build_evidence, character(1))
 
-  # ── final output ───────────────────────────────────────────────────────────
+  # -- final output -----------------------------------------------------------
   verdicts %>%
     dplyr::mutate(Evidence                 = evidences,
                  FI                        = round(FI, 3),

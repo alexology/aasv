@@ -13,7 +13,7 @@ Given a set of query ASVs with their taxonomy, the package:
    flag unusual substitutions
 5. Optionally maps raw reads back to each ASV with VSEARCH to assess codon
    quality
-6. Computes a Functionality Index (FI) for each ASV — a continuous 0-1 score
+6. Computes a Functionality Index (FI) for each ASV, a continuous 0-1 score
    of how compatible the sequence is with a functional mitochondrial COI
    protein, based on codon position, amino-acid conservation, Grantham
    distance, and hydrophobicity shift
@@ -81,7 +81,7 @@ classify_asv()        ← returns a per-ASV Functionality Index (FI) and Class
 
 ## Quick start
 
-### Step 1 — Build the reference database
+### Step 1: Build the reference database
 
 ```r
 library(aasv)
@@ -104,7 +104,7 @@ align_genus_seq(alignment_dir = "results/alignments")
 align_family_seq(alignment_dir = "results/alignments")
 ```
 
-### Step 2 — Check and fix alignments
+### Step 2: Check and fix alignments
 
 ```r
 # Inspect for internal gaps at the species level
@@ -127,7 +127,7 @@ species_alignments <- list.files(
 filter_divergent_seq(species_alignments)
 ```
 
-### Step 3 — Functional analysis
+### Step 3: Functional analysis
 
 ```r
 # asv_taxonomy must include columns: family, genus, species, ASV
@@ -152,7 +152,7 @@ asv_functional_structure(
 )
 ```
 
-### Step 4 — Classify ASVs
+### Step 4: Classify ASVs
 
 ```r
 report <- classify_asv(
@@ -190,7 +190,6 @@ head(report)
 | `asv_functional_structure()` | Run functional analysis for all ASVs |
 | `classify_asv()` | Compute the COI Functionality Index (FI) for each ASV |
 | `aa_similarity_matrix()` | Compute pairwise codon similarity matrix |
-| `aa_similarity_score()` | Score ASV substitutions against reference codons |
 
 ---
 
@@ -202,18 +201,18 @@ expected of a functional mitochondrial COI protein. FI is a compatibility
 score, not an estimate of the probability that a sequence is mitochondrial
 vs. nuclear (NUMT) in origin.
 
-1. **Hard incompatibility check** — if the ASV introduces internal gaps when
+1. **Hard incompatibility check**: if the ASV introduces internal gaps when
    aligned to the reference (a premature stop codon, frameshift, or
    non-triplet indel), `FI = 0` and the ASV is classified *"Severe
    incompatibility with functional COI."*, skipping the checks below.
-2. **Soft site-level penalty** — for sequences with a valid ORF, every
+2. **Soft site-level penalty**: for sequences with a valid ORF, every
    amino-acid position where the ASV differs from the reference database
    contributes a `site_penalty = conservation_weight × normalized_grantham`:
    - *Conservation weight* (toggle `include_conservation`): how invariant
      that position is across the family-level reference alignment
      (Shannon entropy-based), discounted by a confidence factor `1 -
      exp(-n_ref / conservation_k)` that grows with the number of reference
-     sequences behind the position — a position that merely looks invariant
+     sequences behind the position, so a position that merely looks invariant
      because only a couple of references cover it is trusted less than the
      same apparent conservation backed by hundreds
    - *Grantham distance* (toggle `include_grantham`, normalized by
@@ -222,10 +221,10 @@ vs. nuclear (NUMT) in origin.
      positions below `quality_threshold` are excluded from scoring entirely,
      since the call cannot be trusted; `NA` quality (no VSEARCH) is always
      treated as reliable
-3. **Codon-position penalty** (toggle `include_position`) — second-codon-
+3. **Codon-position penalty** (toggle `include_position`): second-codon-
    position substitutions are weighted twice as heavily as first-position
    ones; synonymous third-position-only changes contribute nothing
-4. **Sequence-level hydrophobicity penalty** (toggle `include_hydro`) — the
+4. **Sequence-level hydrophobicity penalty** (toggle `include_hydro`): the
    query's local violation rate against the family hydrophobicity envelope
    is a whole-protein property, not a per-residue one, so it is kept as an
    independent term rather than being repeated across every mutated site

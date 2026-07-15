@@ -75,7 +75,7 @@ test_that("improve_alignment retains sequences that re-align without gaps", {
 
   # s1 has an apparent internal gap in the input alignment, but after
   # strip_gaps + re-align it becomes a shorter sequence with only trailing
-  # gaps — it must NOT be removed.
+  # gaps, it must NOT be removed.
   ali_path <- file.path(tmpdir, "Testus_alpha.fasta")
   write_aa_fasta(
     c(s1 = "ACDEF--GHIKL", s2 = "ACDEFGHIKLMN", s3 = "ACDEFGHIKLMN"),

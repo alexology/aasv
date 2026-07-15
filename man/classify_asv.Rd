@@ -123,7 +123,7 @@ incompatibilities with a functional open reading frame: a premature stop
 codon, a frameshift, a non-triplet indel, or an otherwise invalid/
 incomplete ORF. In the current implementation these are all detected
 collectively via the alignment-gap signal already produced upstream by
-\code{\link{calculate_asv_distance}} (an internal gap in the query's
+\code{calculate_asv_distance()} (an internal gap in the query's
 alignment to the reference profile); if present, \code{FI = 0} and the
 sequence is classified \emph{"Severe incompatibility with functional
 COI."}, bypassing the soft-penalty calculation below.
@@ -132,31 +132,41 @@ For sequences with a valid ORF, a soft penalty is computed for each
 mutated amino-acid position (a position where the query's amino acid
 does not match any reference at that taxonomic level):
 
-\code{site_penalty = conservation_weight * normalized_grantham}, where
+\preformatted{site_penalty = conservation_weight * normalized_grantham}
+
 \code{normalized_grantham} is the Grantham distance normalized by
-\code{grantham_max}, and \code{conservation_weight = (1 -
-normalized_entropy) * (1 - exp(-n_ref / conservation_k))}. The first
-factor is one minus the Shannon entropy of the reference amino acids
-observed at that position (normalized by \code{log(20)}); the second is a
-confidence factor that discounts conservation estimates built from few
-reference sequences (\code{n_ref} - see \code{conservation_k}), so a
-position that merely appears invariant because only two references cover
-it is not treated as strongly conserved as one backed by hundreds.
+\code{grantham_max}. \code{conservation_weight} is:
+
+\preformatted{conservation_weight = (1 - normalized_entropy) * (1 - exp(-n_ref / conservation_k))}
+
+The first factor is one minus the Shannon entropy of the reference amino
+acids observed at that position (normalized by \code{log(20)}); the
+second is a confidence factor that discounts conservation estimates built
+from few reference sequences (\code{n_ref} - see \code{conservation_k}),
+so a position that merely appears invariant because only two references
+cover it is not treated as strongly conserved as one backed by hundreds.
 
 Per-site penalties are averaged into \code{mean_site_penalty} and
-combined with a codon-position penalty, \code{codon_penalty = (Npos1 + 2 *
-Npos2) / (2 * Nmut)} (weighting second-codon-position substitutions twice
-as heavily as first-position ones and synonymous third-position changes at
-zero), and a sequence-level hydrophobicity term, \code{normalized_hydro}
-(the query's local violation rate against the family hydrophobicity
-envelope, computed by \code{\link{calculate_asv_distance}}). Hydrophobicity
-is a whole-protein property rather than a per-residue one, so it is kept
-as an independent, sequence-level component instead of being folded into
+combined with a codon-position penalty:
+
+\preformatted{codon_penalty = (Npos1 + 2 * Npos2) / (2 * Nmut)}
+
+This weights second-codon-position substitutions twice as heavily as
+first-position ones, and synonymous third-position changes at zero. A
+sequence-level hydrophobicity term, \code{normalized_hydro} (the query's
+local violation rate against the family hydrophobicity envelope, computed
+by \code{calculate_asv_distance()}), is also added. Hydrophobicity is
+a whole-protein property rather than a per-residue one, so it is kept as
+an independent, sequence-level component instead of being folded into
 \code{site_penalty} - assigning the same sequence-level value to every
 mutated site would otherwise let it count as evidence once per mutation.
-The total penalty is \code{0.35 * mean_site_penalty + 0.3 * codon_penalty
-+ 0.35 * normalized_hydro}, and \code{FI = 1 - total_penalty}, bounded to
-\code{[0, 1]}.
+
+The total penalty combines all three terms:
+
+\preformatted{total_penalty = 0.35 * mean_site_penalty + 0.3 * codon_penalty + 0.35 * normalized_hydro
+FI = 1 - total_penalty}
+
+bounded to \code{[0, 1]}.
 
 The Functionality Index estimates compatibility with functional COI
 evolution based on codon position, amino-acid conservation, Grantham

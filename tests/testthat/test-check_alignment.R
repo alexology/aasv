@@ -25,7 +25,7 @@ test_that("check_alignment returns empty vector for terminal gaps only", {
   tmpdir <- make_alignment_dir()
   on.exit(unlink(tmpdir, recursive = TRUE))
 
-  # leading and trailing gaps are acceptable — not internal
+  # leading and trailing gaps are acceptable, not internal
   write_aa_fasta(
     c(s1 = "ACDEFGHIKL--", s2 = "ACDEFGHIKLMN", s3 = "--DEFGHIKLMN"),
     file.path(tmpdir, "alignments", "Testidae", "species", "Testus_alpha.fasta")
@@ -54,7 +54,7 @@ test_that("check_alignment skips single-sequence files", {
   tmpdir <- make_alignment_dir()
   on.exit(unlink(tmpdir, recursive = TRUE))
 
-  # single sequence with an internal gap character — must be skipped
+  # single sequence with an internal gap character, must be skipped
   write_aa_fasta(
     c(s1 = "ACDEF--GHIKL"),
     file.path(tmpdir, "alignments", "Testidae", "species", "Testus_alpha.fasta")

@@ -5,7 +5,7 @@ get_hydro_metrics <- function(aa_seq, hydro_window) {
   # 1. Global Score (The average for the whole 140 AA)
   global_score <- Peptides::hydrophobicity(aa_str, scale = "KyteDoolittle")
   
-  # 2. Local Profile (Sliding hydro_window to find 'disasters')
+  # 2. Local Profile 
   # We use a hydro_window of 7, typical for alpha-helix spans
   # (n - hydro_window + 1 can be negative when the sequence is shorter than
   # the window; guard with max(..., 0) so seq_len() never errors and the
@@ -20,7 +20,7 @@ get_hydro_metrics <- function(aa_seq, hydro_window) {
 }
 
 
-# with the help of google gemini
+# check asv structure on hydrophobicity
 check_asv_structure <- function(query_aa,
                                 global_bounds,
                                 lower_env,
@@ -53,7 +53,7 @@ check_asv_structure <- function(query_aa,
 }
 
 
-# from GEMINI
+# get mutation position
 get_mut_pos <- function(q, r) {
   if (is.na(q) | is.na(r)) return(NA)
   q_v <- strsplit(as.character(q), "")[[1]]

@@ -62,7 +62,7 @@ in the file) rather than their mean/median distance to the group: this
 catches true singleton outliers while tolerating legitimate multi-modal
 within-species structure, since a sequence belonging to either subclade
 still has a close relative in the other. Flagged sequences are all
-dropped in a single pass — there is no iterative re-computation of the
+dropped in a single pass - there is no iterative re-computation of the
 distance matrix as sequences are removed.
 
 If \emph{every} sequence in a file is flagged, nothing is removed and a

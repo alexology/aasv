@@ -397,7 +397,7 @@ calculate_asv_distance <- function(output_dir,
 
         if (!file.exists(output_tab) || length(readLines(output_tab)) == 0) next()
 
-        read_ids     <- trimws(unique(unlist(read.table(output_tab, sep = "\t",
+        read_ids     <- trimws(unique(unlist(utils::read.table(output_tab, sep = "\t",
                                                          stringsAsFactors = FALSE,
                                                          header = FALSE))))
         output_lines <- file.path(output_dir, "vsearch_map_back",

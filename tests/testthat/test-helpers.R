@@ -18,44 +18,6 @@ test_that("countSpaces is vectorised", {
   expect_equal(result, c(1L, 0L, 2L))
 })
 
-# --- grantham_score ----------------------------------------------------------
-
-test_that("grantham_score assigns correct classes", {
-  expect_equal(aasv:::grantham_score(0),   "conservative")
-  expect_equal(aasv:::grantham_score(50),  "conservative")
-  expect_equal(aasv:::grantham_score(75),  "moderately conservative")
-  expect_equal(aasv:::grantham_score(125), "moderately radical")
-  expect_equal(aasv:::grantham_score(200), "radical")
-})
-
-test_that("grantham_score is vectorised", {
-  result <- aasv:::grantham_score(c(25, 75, 125, 200))
-  expect_equal(result, c("conservative", "moderately conservative",
-                          "moderately radical", "radical"))
-})
-
-# --- triplet_similarity ------------------------------------------------------
-
-test_that("triplet_similarity assigns correct classes", {
-  expect_equal(aasv:::triplet_similarity(0.05), "radical")
-  expect_equal(aasv:::triplet_similarity(0.2),  "moderately radical")
-  expect_equal(aasv:::triplet_similarity(0.5),  "moderately conservative")
-  expect_equal(aasv:::triplet_similarity(0.8),  "conservative")
-})
-
-# --- phylogeny_score ---------------------------------------------------------
-
-test_that("phylogeny_score returns conservative for 1 and radical otherwise", {
-  expect_equal(aasv:::phylogeny_score(1),   "conservative")
-  expect_equal(aasv:::phylogeny_score(0.5), "radical")
-  expect_equal(aasv:::phylogeny_score(0),   "radical")
-})
-
-test_that("phylogeny_score is vectorised", {
-  result <- aasv:::phylogeny_score(c(1, 0.8, 1))
-  expect_equal(result, c("conservative", "radical", "conservative"))
-})
-
 # --- inner_gaps --------------------------------------------------------------
 
 test_that("inner_gaps detects internal gaps", {
