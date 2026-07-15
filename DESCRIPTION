@@ -1,6 +1,6 @@
 Package: aasv
 Type: Package
-Title: Functional Assessment of COI Metabarcoding ASVs
+Title: Functional Assessment of protein-coding Metabarcoding ASVs
 Version: 0.1.0
 Authors@R: 
     c(person(given = "Alex",
