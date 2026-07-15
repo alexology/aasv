@@ -1,6 +1,6 @@
 Package: aasv
 Type: Package
-Title: A Metabarcoding Pipeline for Windows
+Title: Functional Assessment of COI Metabarcoding ASVs
 Version: 0.1.0
 Authors@R: 
     c(person(given = "Alex",
