@@ -78,7 +78,13 @@ best_translation <- function(x, genetic_code = NULL, res_type = "sequence") {
 
   i   <- 1
   res <- NA
-  max_iter <- nchar(as.character(x))
+  # Only the 3 true reading frames are biologically valid starting points.
+  # Capping the search here (rather than scanning nucleotide-by-nucleotide
+  # to the end of the sequence) means a sequence with a genuine internal
+  # stop codon in all 3 frames returns NA - a detectable failure - instead
+  # of silently succeeding on some short stop-free tail fragment found by
+  # drifting past the stop one nucleotide at a time.
+  max_iter <- min(3L, nchar(as.character(x)))
 
   while (is.na(res) && i <= max_iter) {
     translation <- x %>%
@@ -97,7 +103,7 @@ best_translation <- function(x, genetic_code = NULL, res_type = "sequence") {
     }
   }
 
-  if (identical(res_type, "sequence")) res else i
+  if (identical(res_type, "sequence")) res else if (is.na(res)) NA_integer_ else i
 }
 
 inner_gaps <- function(x) {
@@ -180,6 +186,7 @@ aa_table <- function(x, genetic_code = "5") {
     start    <- best_translation(as.character(x[i]),
                                  genetic_code = genetic_code,
                                  res_type     = "position")
+    if (is.na(start)) return(NULL)
 
     trimmed  <- substring(dna_str, start)
     n_codons <- nchar(trimmed) %/% 3L

@@ -20,22 +20,60 @@ calculate_asv_distance <- function(output_dir,
                                    ...) {
   
   ref_aa_aligned <- unique(ref_aa_aligned)
+
+  # Sentinel result for a query that cannot be reconciled with a functional,
+  # indel-free COI ORF (premature stop codon, frameshift, or an alignment-
+  # forcing indel found further down). aa_pos = -1 is the signal classify_asv()
+  # reads as "Severe incompatibility with functional COI."
+  no_orf_result <- function() {
+    hydro_results <- data.frame(global_min = numeric(),
+                                global_max = numeric(),
+                                global_score = numeric(),
+                                global_pass = logical(),
+                                local_violation_rate = numeric(),
+                                structural_verdict = character())
+
+    results_ref <- data.frame(aa_pos = -1,
+                              illegal_aa = NA,
+                              dna_triplet = NA,
+                              nt_coords = NA,
+                              n_sequences_ali = NA,
+                              n_unique_seq_ali = NA,
+                              median_quality_prob = NA,
+                              n_sequences_prob = NA,
+                              ref_aa = NA,
+                              dna_triplet_ref = NA,
+                              nt_coords_ref = NA,
+                              ref_id = NA,
+                              triplet_mut_pos = NA,
+                              ham_dist = NA,
+                              grantham_dist = NA)
+
+    list(hydro = hydro_results, aa = results_ref)
+  }
+
   # 1. Translate Query
   q_dna_obj <- Biostrings::DNAStringSet(query_dna)
-  
+
   names(q_dna_obj) <- query_id
-  
-  
+
+
   q_dna_start_pos <- best_translation(q_dna_obj,
                                       genetic_code = genetic_code,
                                       res_type = "position")
 
-  q_aa_raw  <- best_translation(q_dna_obj,
-                                genetic_code = genetic_code) %>%
-    Biostrings::AAStringSet()
-  
+  q_aa_chr <- best_translation(q_dna_obj, genetic_code = genetic_code)
+
+  # None of the 3 reading frames translates the query end-to-end without a
+  # stop codon: a genuine premature stop (e.g. a NUMT or a mutation), not
+  # merely a short/incomplete fragment. Report it as a hard ORF
+  # incompatibility instead of aligning whatever stop-free tail remains.
+  if (is.na(q_aa_chr)) return(no_orf_result())
+
+  q_aa_raw <- Biostrings::AAStringSet(q_aa_chr)
+
   names(q_aa_raw) <- query_id
-  
+
   # 2. Align Query AA to the Aligned Reference AA
   # We use global-local to find where the query fits in the pre-aligned ref
   aln <- DECIPHER::AlignProfiles(q_aa_raw,
@@ -60,35 +98,7 @@ calculate_asv_distance <- function(output_dir,
   query_has_ig  <- inner_gaps(aln_mat)[query_row] ||
                      causes_internal_gaps(aln_mat)[query_row]
 
-  if(query_has_ig){
-    hydro_results <- data.frame(global_min = numeric(),
-                                global_max = numeric(),
-                                global_score = numeric(),
-                                global_pass = logical(),
-                                local_violation_rate = numeric(),
-                                structural_verdict = character())
-    
-    
-    results_ref <- data.frame(aa_pos = -1,
-                              illegal_aa = NA,
-                              dna_triplet = NA,
-                              nt_coords = NA,
-                              n_sequences_ali = NA,
-                              n_unique_seq_ali = NA,
-                              median_quality_prob = NA,
-                              n_sequences_prob = NA,
-                              ref_aa = NA,
-                              dna_triplet_ref = NA,
-                              nt_coords_ref = NA,
-                              ref_id = NA,
-                              triplet_mut_pos = NA,
-                              ham_dist = NA,
-                              grantham_dist = NA)
-    
-    return(list(hydro = hydro_results,
-                aa = results_ref) )
-    
-  }
+  if(query_has_ig) return(no_orf_result())
   
   
   # get the number of gaps for each sequence
